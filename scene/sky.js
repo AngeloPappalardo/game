@@ -1,120 +1,126 @@
-import * as THREE from 'three';
-import { Sky } from 'three/addons/objects/Sky.js';
+import * as THREE from "three";
+import { Sky } from "three/addons/objects/Sky.js";
+import { createPanel } from "../ui/guiPanel";
 
-let sun, sky, stars, moon, time = 0;
-let originalBackground = null;
-/**
- * Cielo dinamico con ciclo giorno-notte e stelle semplici
- * @param {THREE.Scene} scene
- * @param {THREE.Renderer} renderer
- * @param {function} onReady
- */
-export function addSky(scene, renderer, onReady) {
-    // Cielo atmosferico
-    sky = new Sky();
-    sky.scale.setScalar(450000);
-    scene.add(sky);
+let sky, stars, moon, sunLight;
+let time = 0;
 
-    // Sole
-    sun = new THREE.Vector3();
-    originalBackground = scene.background;
-    // Luna
-    const moonGeo = new THREE.SphereGeometry(10, 32, 32);
-    const moonMat = new THREE.MeshStandardMaterial({
-        emissive: new THREE.Color(0x223366),
-        color: 0x111122,
-    });
-    moon = new THREE.Mesh(moonGeo, moonMat);
-    moon.position.set(-100, 100, -100);
-    scene.add(moon);
+export const sun = new THREE.Vector3();
 
-    // Stelle generate proceduralmente
-    const starGeo = new THREE.BufferGeometry();
-    const starCount = 1000;
-    const starPositions = new Float32Array(starCount * 3);
-    for (let i = 0; i < starCount * 3; i++) {
-        starPositions[i] = (Math.random() - 0.5) * 4000; // distribuzione ampia
-    }
-    starGeo.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
-    const starMat = new THREE.PointsMaterial({
-        color: 0xffffff,
-        size: 1.5,
-        transparent: true,
-        opacity: 0, // inizialmente invisibili
-        sizeAttenuation: true,
-    });
-    stars = new THREE.Points(starGeo, starMat);
-    scene.add(stars);
+export const skyControls = {
+  turbidity: 10,
+  rayleigh: 2,
+  mieCoefficient: 0.005,
+  mieDirectionalG: 0.7,
+  inclination: 0.49,
+  azimuth: 0.25,
+  exposure: 0.5,
+  renderer: null,
+  scene: null, // AGGIUNTO per gestire lo sfondo
+};
 
-    // Impostazioni cielo fisico
-    const effectController = {
-        turbidity: 0,
-        rayleigh: 0.1,
-        mieCoefficient: 0.005,
-        mieDirectionalG: 0.7,
-        inclination: 0.49,
-        azimuth: 0.25,
-        exposure: renderer.toneMappingExposure,
-    };
+export function updateSun() {
+  const theta = Math.PI * (skyControls.inclination - 0.5);
+  const phi = 2 * Math.PI * (skyControls.azimuth - 0.5);
 
-    function updateSun() {
-        const theta = Math.PI * (effectController.inclination - 0.5);
-        const phi = 2 * Math.PI * (effectController.azimuth - 0.5);
+  sun.x = Math.cos(phi);
+  sun.y = Math.sin(theta);
+  sun.z = Math.sin(phi);
 
-        sun.x = Math.cos(phi);
-        sun.y = Math.sin(theta);
-        sun.z = Math.sin(phi);
+  sky.material.uniforms["sunPosition"].value.copy(sun);
+  moon.position.set(-sun.x * 300, -sun.y * 300, -sun.z * 300);
 
-        sky.material.uniforms['sunPosition'].value.copy(sun);
-        moon.position.set(-sun.x * 300, -sun.y * 300, -sun.z * 300);
+  sky.material.uniforms["turbidity"].value = skyControls.turbidity;
+  sky.material.uniforms["rayleigh"].value = skyControls.rayleigh;
+  sky.material.uniforms["mieCoefficient"].value = skyControls.mieCoefficient;
+  sky.material.uniforms["mieDirectionalG"].value = skyControls.mieDirectionalG;
 
-        // Calcolo notte
-        const nightFactor = Math.max(0, -sun.y);
-        if (stars) {
-            stars.material.opacity = nightFactor;
-            stars.material.transparent = true;
-            stars.material.needsUpdate = true;
-        }
-        moon.material.emissiveIntensity = nightFactor;
+  const nightFactor = Math.max(0, -sun.y);
+  if (stars) {
+    stars.material.opacity = nightFactor;
+    stars.material.transparent = true;
+    stars.material.needsUpdate = true;
+  }
 
-        // Espone meno di notte
-        renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        renderer.toneMappingExposure = THREE.MathUtils.lerp(0.5, 0.15, nightFactor);
+  moon.material.emissiveIntensity = nightFactor;
 
-        // Nascondi cielo fisico quasi completamente di notte
-        sky.visible = nightFactor < 0.1;
-        scene.background = new THREE.Color(0x000000);
+  skyControls.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  skyControls.renderer.toneMappingExposure = skyControls.exposure;
 
-    }
+  sky.visible = nightFactor < 0.1;
 
-    // Set iniziale shader cielo
-    sky.material.uniforms['turbidity'].value = effectController.turbidity;
-    sky.material.uniforms['rayleigh'].value = effectController.rayleigh;
-    sky.material.uniforms['mieCoefficient'].value = effectController.mieCoefficient;
-    sky.material.uniforms['mieDirectionalG'].value = effectController.mieDirectionalG;
-    updateSun();
-    if (onReady) onReady();
+  // CORRETTO: usa la scena e non il renderer
+  if (skyControls.scene) {
+    skyControls.scene.background = new THREE.Color(0x000000);
+  }
+
+  sunLight.position.set(sun.x * 300, sun.y * 300, sun.z * 300);
+  sunLight.target.position.set(0, 0, 0);
+  sunLight.target.updateMatrixWorld();
 }
 
-/**
- * Chiama ogni frame per aggiornare il cielo
- */
+export function addSky(scene, renderer, onReady) {
+  createPanel(null, skyControls, updateSun);
+  skyControls.renderer = renderer;
+  skyControls.scene = scene; // AGGIUNTO
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+  scene.add(ambientLight);
+
+  sky = new Sky();
+  sky.scale.setScalar(450000);
+  scene.add(sky);
+
+  const moonGeo = new THREE.SphereGeometry(10, 32, 32);
+  const moonMat = new THREE.MeshStandardMaterial({
+    emissive: new THREE.Color(0x223366),
+    color: 0x111122,
+  });
+  moon = new THREE.Mesh(moonGeo, moonMat);
+  moon.position.set(-100, 100, -100);
+  scene.add(moon);
+
+  const starGeo = new THREE.BufferGeometry();
+  const starCount = 1000;
+  const starPositions = new Float32Array(starCount * 3);
+  for (let i = 0; i < starCount * 3; i++) {
+    starPositions[i] = (Math.random() - 0.5) * 4000;
+  }
+  starGeo.setAttribute("position", new THREE.BufferAttribute(starPositions, 3));
+  const starMat = new THREE.PointsMaterial({
+    color: 0xffffff,
+    size: 1.5,
+    transparent: true,
+    opacity: 0,
+    sizeAttenuation: true,
+  });
+  stars = new THREE.Points(starGeo, starMat);
+  scene.add(stars);
+
+  sky.material.uniforms["turbidity"].value = skyControls.turbidity;
+  sky.material.uniforms["rayleigh"].value = skyControls.rayleigh;
+  sky.material.uniforms["mieCoefficient"].value = skyControls.mieCoefficient;
+  sky.material.uniforms["mieDirectionalG"].value = skyControls.mieDirectionalG;
+
+  sunLight = new THREE.DirectionalLight(0xffffff, 10);
+  sunLight.color.setHSL(0.1, 0.7, 0.9);
+  sunLight.castShadow = true;
+  sunLight.shadow.mapSize.width = 2048;
+  sunLight.shadow.mapSize.height = 2048;
+  sunLight.shadow.camera.near = 0.5;
+  sunLight.shadow.camera.far = 1000;
+  sunLight.shadow.camera.left = -200;
+  sunLight.shadow.camera.right = 200;
+  sunLight.shadow.camera.top = 200;
+  sunLight.shadow.camera.bottom = -200;
+  scene.add(sunLight);
+
+  updateSun();
+  if (onReady) onReady();
+}
+
 export function updateSky(delta) {
-    time += delta * 0.01;
-    const inclination = (Math.sin(time) + 1) / 2;
-
-    const theta = Math.PI * (inclination - 0.5);
-    const phi = 2 * Math.PI * 0.25;
-    const sunX = Math.cos(phi);
-    const sunY = Math.sin(theta);
-    const sunZ = Math.sin(phi);
-    sun.set(sunX, sunY, sunZ);
-
-    sky.material.uniforms['sunPosition'].value.copy(sun);
-    moon.position.set(-sunX * 300, -sunY * 300, -sunZ * 300);
-
-    const nightFactor = Math.max(0, -sunY);
-    if (stars) stars.material.opacity = nightFactor;
-    moon.material.emissiveIntensity = nightFactor;
-    sky.visible = nightFactor < 0.1;
+  time += delta * 0.01;
+  const inclination = (Math.sin(time) + 1) / 2;
+  skyControls.inclination = inclination;
+  updateSun();
 }

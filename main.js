@@ -50,8 +50,6 @@ function init() {
 	clock = new THREE.Clock();
 
 	scene = new THREE.Scene();
-	scene.background = new THREE.Color(0x5e5d5d);
-	scene.fog = new THREE.Fog(0x5e5d5d, 2, 20);
 
 	group = new THREE.Group();
 	scene.add(group);
@@ -59,17 +57,17 @@ function init() {
 	followGroup = new THREE.Group();
 	scene.add(followGroup);
 
-	const dirLight = new THREE.DirectionalLight(0xffffff, 5);
-	dirLight.position.set(- 2, 5, - 3);
-	dirLight.castShadow = true;
-	const cam = dirLight.shadow.camera;
-	cam.top = cam.right = 2;
-	cam.bottom = cam.left = - 2;
-	cam.near = 3;
-	cam.far = 8;
-	dirLight.shadow.mapSize.set(1024, 1024);
-	followGroup.add(dirLight);
-	followGroup.add(dirLight.target);
+	//const dirLight = new THREE.DirectionalLight(0xffffff, 5);
+	//dirLight.position.set(- 2, 5, - 3);
+	//dirLight.castShadow = true;
+	//const cam = dirLight.shadow.camera;
+	//cam.top = cam.right = 2;
+	//cam.bottom = cam.left = - 2;
+	//cam.near = 3;
+	//cam.far = 8;
+	//dirLight.shadow.mapSize.set(1024, 1024);
+	//followGroup.add(dirLight);
+	//followGroup.add(dirLight.target);
 
 	//scene.add( new THREE.CameraHelper( cam ) );
 
