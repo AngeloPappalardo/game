@@ -39,23 +39,6 @@ export function addFloor(scene, renderer, controls) {
 
   controls.floorDecale = (size / repeat) * 4;
 
-  // Light
-  const bulbGeometry = new THREE.SphereGeometry(0.05, 16, 8);
-  const bulbLight = new THREE.PointLight(0xffee88, 2, 500, 2);
-
-  const bulbMat = new THREE.MeshStandardMaterial({
-    emissive: 0xffffff,
-    emissiveIntensity: 1,
-    color: 0xffffff,
-  });
-
-  //bulbLight.add(new THREE.Mesh(bulbGeometry, bulbMat));
-  bulbLight.position.set(1, 0.1, -3);
-  bulbLight.castShadow = true;
-  bulbLight.receiveShadow = true; 
-
-  floor.add(bulbLight);
-
   // Ritorna il riferimento al floor se ti serve per aggiornamenti futuri
   return floor;
 }
