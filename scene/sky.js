@@ -9,9 +9,9 @@ export const sun = new THREE.Vector3();
 
 export const skyControls = {
   turbidity: 10,
-  rayleigh: 2,
+  rayleigh: 0.5,
   mieCoefficient: 0.005,
-  mieDirectionalG: 0.7,
+  mieDirectionalG: 0.15,
   inclination: 0.49,
   azimuth: 0.25,
   exposure: 0.5,
@@ -41,7 +41,6 @@ export function updateSun() {
     stars.material.transparent = true;
     stars.material.needsUpdate = true;
   }
-
   moon.material.emissiveIntensity = nightFactor;
 
   skyControls.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -102,7 +101,13 @@ export function addSky(scene, renderer, onReady) {
   sky.material.uniforms["mieDirectionalG"].value = skyControls.mieDirectionalG;
 
   sunLight = new THREE.DirectionalLight(0xffffff, 10);
-  sunLight.color.setHSL(0.1, 0.7, 0.9);
+  const dayFactor = Math.max(0, sun.y);
+
+  // Tonalità fissa (rosso/arancio), ma varia saturazione e luminosità
+  const hue = 0.1;
+  const saturation = THREE.MathUtils.lerp(1.0, 0.6, dayFactor); // alba/tramonto → meno saturo a mezzogiorno
+  const lightness = THREE.MathUtils.lerp(0.3, 0.9, dayFactor);
+  sunLight.color.setHSL(hue, saturation, lightness);
   sunLight.castShadow = true;
   sunLight.shadow.mapSize.width = 2048;
   sunLight.shadow.mapSize.height = 2048;
@@ -120,7 +125,12 @@ export function addSky(scene, renderer, onReady) {
 
 export function updateSky(delta) {
   time += delta * 0.01;
+  // Simula inclinazione (altezza del sole nel cielo)
   const inclination = (Math.sin(time) + 1) / 2;
+
+  // Simula azimuth (posizione da Est a Ovest nel cielo)
+  const azimuth = (Math.cos(time) + 1) / 2;
   skyControls.inclination = inclination;
+  skyControls.azimuth = azimuth;
   updateSun();
 }
