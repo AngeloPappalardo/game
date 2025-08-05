@@ -1,4 +1,4 @@
-// controller/CharacterController.js
+import * as THREE from 'three';
 
 function unwrapRad(r) {
 	return Math.atan2(Math.sin(r), Math.cos(r));
@@ -9,6 +9,11 @@ function setWeight(action, weight) {
 	action.setEffectiveTimeScale(1);
 	action.setEffectiveWeight(weight);
 }
+
+// Raycaster e vettori di supporto (fuori dalla funzione per evitare ricreazione ogni frame)
+const downRay = new THREE.Raycaster();
+const rayOrigin = new THREE.Vector3();
+const rayDirection = new THREE.Vector3(0, -1, 0);
 
 export function updateCharacter({
 	delta,
@@ -33,7 +38,7 @@ export function updateCharacter({
 	const active = key[0] !== 0 || key[1] !== 0;
 	const play = active ? (key[2] ? 'Run' : 'Walk') : 'Idle';
 
-	// Change animation
+	// Cambio animazione
 	if (controls.current !== play) {
 		const current = actions[play];
 		const old = actions[controls.current];
@@ -60,7 +65,7 @@ export function updateCharacter({
 		}
 	}
 
-	// Movement
+	// Movimento
 	if (controls.current !== 'Idle') {
 		const velocity =
 			controls.current === 'Run'
@@ -89,7 +94,22 @@ export function updateCharacter({
 		if (Math.abs(dz) > controls.floorDecale) floor.position.z += dz;
 	}
 
-	if (mixer) mixer.update(delta);
+	// === Calcolo altezza dal terreno dinamica ===
+	if (floor && floor.mesh) {
+		const rayHeight = group.position.y + 5;
+		rayOrigin.set(group.position.x, rayHeight, group.position.z);
+		downRay.set(rayOrigin, rayDirection);
+		const intersects = downRay.intersectObject(floor.mesh, true);
+		if (intersects.length > 0) {
+			const terrainY = intersects[0].point.y;
+			const heightOffset = 1.0; // distanza sopra il terreno
+			group.position.y = terrainY + heightOffset;
+			position.y = group.position.y;
+			followGroup.position.y = terrainY;
+			camera.position.y = terrainY + 2; // altezza camera opzionale
+		}
+	}
 
+	if (mixer) mixer.update(delta);
 	orbitControls.update();
 }
