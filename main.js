@@ -4,10 +4,15 @@ import { loadPlayer } from './model/player';
 import { addFloor } from './scene/floor';
 import { updateCharacter } from './controller/CharacterController';
 import { registerKeyboardListeners } from './controller/KeyboardControls';
-import { addSky, updateSky } from './scene/sky';
+import { addSky, updateSky, sun } from './scene/sky';
+import { applyTerrainPreset, getTerrainPreset } from './scene/terrainMath.mjs';
+import { createVegetationSystem } from './scene/vegetation.js';
+import { createWaterSystem } from './scene/water.js';
 
 let scene, renderer, camera, floor, orbitControls;
 let group, followGroup, model, skeleton, mixer, clock;
+let vegetationSystem;
+let waterSystem;
 
 let actions;
 
@@ -39,6 +44,56 @@ const controls = {
 	cameraTargetSmooth: 12,
 	cameraPositionSmooth: 10,
 	terrainSeed: 1337,
+	terrainProfile: 'hills',
+	terrainMaxHeight: 12,
+	terrainSegments: 260,
+	waterLevel: 1.2,
+	waterSize: 420,
+	waterSegments: 220,
+	waterWaveAmplitude: 0.42,
+	waterWaveSpeed: 0.85,
+	waterWaveScale: 0.085,
+	waterOpacity: 0.72,
+	grassEnabled: true,
+	secondaryVegetationEnabled: true,
+	grassDensityNear: 1.0,
+	grassDensityFar: 1.0,
+	grassCopiesNear: 6,
+	grassCopiesFar: 5,
+	grassJitterNear: 0.095,
+	grassJitterFar: 0.085,
+	grassDistanceNear: 14,
+	grassDistanceFar: 28,
+	grassWindStrength: 0.22,
+	grassStompRadius: 1.25,
+	grassStompStrength: 0.82,
+	grassPushStrength: 0.22,
+	grassBladeWidthNear: 0.028,
+	grassBladeHeightNear: 0.34,
+	grassBladeWidthFar: 0.022,
+	grassBladeHeightFar: 0.28,
+	grassHeightMinNear: 0.92,
+	grassHeightMaxNear: 1.05,
+	grassHeightMinFar: 0.9,
+	grassHeightMaxFar: 1.03,
+	grassWidthMinNear: 0.95,
+	grassWidthMaxNear: 1.03,
+	grassWidthMinFar: 0.94,
+	grassWidthMaxFar: 1.02,
+	grassMinWeight: 0.02,
+	grassMaxSlope: 0.75,
+	bushDensity: 0.08,
+	treeDensity: 0.05,
+	pebbleDensity: 0.12,
+	maxDynamicRocks: 220,
+	rockSlopeAccel: 4.0,
+	rockPlayerPush: 8.5,
+	rockPlayerRadius: 0.75,
+	rockDamping: 2.2,
+	rockRestitution: 0.22,
+	rockCollisionIterations: 2,
+	rockMaxSpeed: 3.6,
+	rockGroundStick: 0.58,
 	debugEnabled: false,
 	debugData: {
 		playerY: 0,
@@ -47,6 +102,11 @@ const controls = {
 		groundOffset: 1,
 		spawnInitialized: false,
 		floorSeed: 1337,
+		terrainProfile: 'hills',
+		grassInstancesNear: 0,
+		grassInstancesFar: 0,
+		treesInstances: 0,
+		dynamicRocks: 0,
 	},
 };
 
@@ -59,6 +119,7 @@ init();
 
 function init() {
 	const container = document.getElementById('container');
+	loadTerrainPresetFromStorage();
 
 	camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
 	camera.position.set(0, 22, -5);
@@ -107,8 +168,41 @@ function init() {
 
 		floor = addFloor(scene, controls);
 		controls.debugData.floorSeed = floor.userData.terrainSeed ?? controls.terrainSeed;
+		controls.debugData.terrainProfile = floor.userData.terrainProfile ?? controls.terrainProfile;
+		vegetationSystem = createVegetationSystem(scene, floor, controls);
+		waterSystem = createWaterSystem(scene, floor, controls);
+		if (vegetationSystem) {
+			controls.debugData.grassInstancesNear = vegetationSystem.nearGrass.count;
+			controls.debugData.grassInstancesFar = vegetationSystem.farGrass.count;
+			controls.debugData.treesInstances = vegetationSystem.trees.reduce(
+				(sum, mesh) => sum + mesh.count,
+				0
+			);
+			controls.debugData.dynamicRocks = vegetationSystem.rockPhysics.bodies.length;
+		}
+		saveTerrainPresetToStorage();
 		initializeCharacterOnTerrain();
 	});
+}
+
+function loadTerrainPresetFromStorage() {
+	try {
+		const raw = window.localStorage.getItem('terrainPreset');
+		if (!raw) return;
+		const preset = JSON.parse(raw);
+		applyTerrainPreset(controls, preset);
+	} catch (error) {
+		console.warn('Impossibile leggere terrainPreset da storage:', error);
+	}
+}
+
+function saveTerrainPresetToStorage() {
+	try {
+		const preset = getTerrainPreset(controls);
+		window.localStorage.setItem('terrainPreset', JSON.stringify(preset));
+	} catch (error) {
+		console.warn('Impossibile salvare terrainPreset in storage:', error);
+	}
 }
 
 function initializeCharacterOnTerrain() {
@@ -161,6 +255,8 @@ function animate() {
 		orbitControls,
 	});
 	updateFollowCamera(delta);
+	if (waterSystem) waterSystem.update(delta, sun);
+	if (vegetationSystem) vegetationSystem.update(delta, camera, controls.position);
 	updateDebugOverlay();
 
 	renderer.render(scene, camera);
@@ -262,10 +358,14 @@ function updateDebugOverlay() {
 		'Debug (F3)',
 		`spawnInitialized: ${d.spawnInitialized}`,
 		`terrainSeed: ${d.floorSeed}`,
+		`terrainProfile: ${d.terrainProfile}`,
 		`terrainY: ${terrainYText}`,
 		`playerY: ${playerYText}`,
 		`cameraY: ${cameraYText}`,
 		`player-terrain: ${deltaText}`,
 		`groundOffset: ${d.groundOffset.toFixed(2)}`,
+		`grass near/far: ${d.grassInstancesNear}/${d.grassInstancesFar}`,
+		`trees instances: ${d.treesInstances}`,
+		`dynamic rocks: ${d.dynamicRocks}`,
 	].join('\n');
 }

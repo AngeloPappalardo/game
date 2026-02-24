@@ -58,3 +58,43 @@ Per ogni task completato:
 Criterio di uscita:
 - I bug di spawn sono riproducibili e osservabili con telemetria locale.
 
+## Fase 7 - Terreno Realistico
+- [x] Implementare noise multi-ottava e biomi base.
+- [x] Introdurre blend materiali terrain per quota/pendenza.
+- [x] Definire preset seed + parametri terreno.
+
+Criterio di uscita:
+- Terreno meno piatto/ripetitivo e leggibile a colpo d'occhio.
+
+## Fase 8 - Erba E Vegetazione
+- [x] Aggiungere erba instanziata con densita` scalabile.
+- [x] Applicare LOD/culling per mantenere FPS stabili.
+- [x] Introdurre vento e variazioni visive per naturalezza.
+
+Criterio di uscita:
+- Prati credibili senza regressione prestazioni evidente.
+
+## Fase 9 - Paesaggio E Atmosfera
+- [x] Scattering di alberi/rocce/props per bioma.
+- [x] Migliorare cielo, nebbia e lighting ambientale.
+- [x] Rifinire palette colore globale (look coerente).
+
+Criterio di uscita:
+- Scenario percepito come "mondo vivo" e non prototipo.
+
+## Fase 10 - Performance E Tooling
+- [ ] Profiling con metriche CPU/GPU e quality presets.
+- [ ] Debug panel avanzato con tuning live.
+- [ ] Preset export/import per iterazioni veloci.
+
+Criterio di uscita:
+- Pipeline stabile per iterare su qualita` visiva senza rompere gameplay.
+
+## Fase 11 - Mare Realistico
+- [x] Aggiungere `WaterSystem` con shader acqua custom.
+- [x] Integrare onde animate e riflessi dipendenti dal sole.
+- [x] Collegare parametri runtime mare in `controls`.
+
+Criterio di uscita:
+- Il mare risulta leggibile e dinamico senza rompere il gameplay su terreno.
+

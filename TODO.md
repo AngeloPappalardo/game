@@ -39,6 +39,59 @@
 - [x] Aggiungere test/smoke script di spawn: verifica automatica che il player non parta sotto/sopra soglia.
 - [x] Introdurre seed deterministico del terreno per riprodurre bug di spawn sempre nello stesso punto.
 
+## P7 - Terreno Realistico
+- [x] Aumentare dettaglio del terreno con noise multi-ottava (fBm) e controllo frequenze.
+- [x] Introdurre maschere bioma (spiaggia, prato, roccia, neve) in base a quota e pendenza.
+- [x] Generare mappe splat/weight per blend materiali multi-texture.
+- [x] Aggiungere normal map e roughness map differenziate per bioma.
+- [x] Aggiungere macro-variazioni (colline grandi) + micro-dettaglio (erosione locale).
+- [x] Introdurre seed + preset terreno salvabili/caricabili.
+
+## P8 - Erba E Vegetazione
+- [x] Implementare sistema erba instanziata (`InstancedMesh`) con LOD e culling distanza.
+- [x] Distribuire erba solo in aree valide (bioma prato, pendenza sotto soglia).
+- [x] Aggiungere variazioni per ciuffi (scala, rotazione, colore, densita`).
+- [x] Aggiungere animazione vento per erba (shader o offset per istanza).
+- [x] Introdurre vegetazione secondaria: cespugli, fiori, piccoli sassi.
+- [x] Aggiungere collision policy per vegetazione (visual only o fisica semplificata).
+
+## P9 - Paesaggio E Atmosfera
+- [x] Aggiungere elementi di sfondo (montagne distant, skyline, horizon fog).
+- [x] Inserire rocce/alberi modulari con scattering procedurale per bioma.
+- [x] Migliorare cielo con transizioni colore alba/tramonto/notte piu` naturali.
+- [x] Aggiungere nebbia atmosferica coerente con ora del giorno e distanza.
+- [x] Aggiungere ombre e luce globale con calibrazione realistica (intensita`, color temperature).
+- [x] Integrare effetti ambientali opzionali: particelle polvere, insetti, volumetric light fake.
+
+## P10 - Materiali E Shader
+- [x] Introdurre shader terrain blend (albedo/normal/roughness per layer).
+- [x] Aggiungere triplanar mapping per evitare stretching su pendenze alte.
+- [x] Aggiungere color grading base e regolazioni esposizione automatiche soft.
+- [x] Implementare SSAO/light contact fake leggero per profondita` percepita.
+- [x] Preparare pipeline asset PBR (naming, compressione texture, atlasing).
+
+## P11 - Performance E Scalabilita`
+- [ ] Profilare frame time (CPU/GPU) e identificare colli di bottiglia.
+- [ ] Aggiungere LOD per terreno/vegetazione/oggetti paesaggio.
+- [ ] Implementare culling frustum e distance culling per istanze.
+- [ ] Introdurre quality presets (Low/Medium/High/Ultra) con parametri runtime.
+- [ ] Ridurre draw call con batching/instancing dove possibile.
+- [ ] Definire budget target: FPS minimi desktop e laptop.
+
+## P12 - Tooling Creativo
+- [ ] Aggiungere pannello debug per tuning live: seed, densita` erba, vento, fog, biomi.
+- [ ] Aggiungere export/import preset mondo (`worldPreset.json`).
+- [ ] Aggiungere comando rigenerazione mondo da seed senza reload pagina.
+- [ ] Aggiungere screenshot benchmark mode per confronto preset visivi.
+- [ ] Documentare workflow artistico-tecnico (come creare nuovi biomi/asset).
+
+## P13 - Mare Realistico
+- [x] Integrare sistema mare (`WaterSystem`) con mesh dedicata e shader custom.
+- [x] Aggiungere onde dinamiche multi-frequenza animate a runtime.
+- [x] Aggiungere shading realistico acqua (fresnel, specular, foam in cresta).
+- [x] Collegare il sole al mare per riflessi direzionali coerenti.
+- [x] Esporre parametri base mare (`waterLevel`, ampiezza, velocita`, scala, opacita`).
+
 ## Note operative
 - Procedere in ordine P0 -> P1 -> P2 -> P3.
 - Dopo ogni blocco: test manuale avvio (`npm run dev`) e smoke test movimento personaggio.
