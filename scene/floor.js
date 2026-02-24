@@ -1,44 +1,65 @@
-// model/floor.js
 import * as THREE from "three";
+import { createTerrainNoise2D, computeTerrainHeight } from "./terrainMath.mjs";
 
-export function addFloor(scene, renderer, controls) {
-  const PI90 = Math.PI / 2;
-  const size = 50;
-  const repeat = 16;
+export function addFloor(scene, controls) {
+  const size = 80;
+  const segments = 108;
+  const maxHeight = 12;
+  const seed = controls.terrainSeed ?? 1337;
 
-  const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
+  const geometry = new THREE.PlaneGeometry(size, size, segments, segments);
+  geometry.rotateX(-Math.PI / 2);
 
-  const floorT = new THREE.TextureLoader().load("textures/floors/erba.jpg");
-  floorT.colorSpace = THREE.SRGBColorSpace;
-  floorT.repeat.set(repeat, repeat);
-  floorT.wrapS = floorT.wrapT = THREE.RepeatWrapping;
-  floorT.anisotropy = maxAnisotropy;
+  const noise2D = createTerrainNoise2D(seed);
 
-  const floorN = new THREE.TextureLoader().load("textures/floors/erba.jpg");
-  floorN.repeat.set(repeat, repeat);
-  floorN.wrapS = floorN.wrapT = THREE.RepeatWrapping;
-  floorN.anisotropy = maxAnisotropy;
+  const pos = geometry.attributes.position;
+  const colors = new Float32Array(pos.count * 3);
+  let maxTerrainHeight = -Infinity;
 
-  const mat = new THREE.MeshStandardMaterial({
-    map: floorT,
-    normalMap: floorN,
-    normalScale: new THREE.Vector2(0.5, 0.5),
-    color: 0xffffff,
-    depthWrite: false,
-    roughness: 0.85,
-    //roughness: 0.4, // <- PIÙ LUCIDO
-    //metalness: 0.1, // <- UN PO’ DI RIFLESSO
+  const color = new THREE.Color();
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const z = pos.getZ(i);
+    const height = computeTerrainHeight(x, z, size, maxHeight, noise2D);
+    pos.setY(i, height);
+    if (height > maxTerrainHeight) maxTerrainHeight = height;
+
+    // Colore in base all’altezza
+    const t = height / maxHeight;
+    if (t < 0.3) {
+      // mare
+      color.setRGB(0, 0, 0.5 + t * 0.5);
+    } else if (t < 0.5) {
+      // spiaggia
+      color.setRGB(0.8, 0.7, 0.4);
+    } else if (t < 0.8) {
+      // prato
+      color.setRGB(0.2, 0.7, 0.2);
+    } else {
+      // vetta
+      color.setRGB(1, 1, 1);
+    }
+    colors[i * 3] = color.r;
+    colors[i * 3 + 1] = color.g;
+    colors[i * 3 + 2] = color.b;
+  }
+
+  pos.needsUpdate = true;
+  geometry.computeVertexNormals();
+  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+
+  const material = new THREE.MeshStandardMaterial({
+    vertexColors: true,
+    roughness: 1,
+    metalness: 0,
   });
 
-  const g = new THREE.PlaneGeometry(size, size, 80, 50);
-  g.rotateX(-PI90);
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.receiveShadow = true;
+  mesh.userData.maxTerrainHeight = maxTerrainHeight;
+  mesh.userData.terrainSeed = seed;
+  scene.add(mesh);
 
-  const floor = new THREE.Mesh(g, mat);
-  floor.receiveShadow = true;
-  scene.add(floor);
-
-  controls.floorDecale = (size / repeat) * 4;
-
-  // Ritorna il riferimento al floor se ti serve per aggiornamenti futuri
-  return floor;
+  controls.floorDecale = size / 4;
+  return mesh;
 }

@@ -16,7 +16,7 @@ export const skyControls = {
   azimuth: 0.25,
   exposure: 0.5,
   renderer: null,
-  scene: null, // AGGIUNTO per gestire lo sfondo
+  scene: null,
 };
 
 export function updateSun() {
@@ -36,19 +36,29 @@ export function updateSun() {
   sky.material.uniforms["mieDirectionalG"].value = skyControls.mieDirectionalG;
 
   const nightFactor = Math.max(0, -sun.y);
+  const dayFactor = Math.max(0, sun.y);
+
   if (stars) {
     stars.material.opacity = nightFactor;
     stars.material.transparent = true;
     stars.material.needsUpdate = true;
   }
+
   moon.material.emissiveIntensity = nightFactor;
+
+  if (sunLight) {
+    const hue = 0.1;
+    const saturation = THREE.MathUtils.lerp(1.0, 0.6, dayFactor);
+    const lightness = THREE.MathUtils.lerp(0.3, 0.9, dayFactor);
+    sunLight.color.setHSL(hue, saturation, lightness);
+    sunLight.intensity = THREE.MathUtils.lerp(0.2, 10, dayFactor);
+  }
 
   skyControls.renderer.toneMapping = THREE.ACESFilmicToneMapping;
   skyControls.renderer.toneMappingExposure = skyControls.exposure;
 
   sky.visible = nightFactor < 0.1;
 
-  // CORRETTO: usa la scena e non il renderer
   if (skyControls.scene) {
     skyControls.scene.background = new THREE.Color(0x000000);
   }
@@ -59,9 +69,10 @@ export function updateSun() {
 }
 
 export function addSky(scene, renderer, onReady) {
-  createPanel(null, skyControls, updateSun);
+  createPanel({ skyControls, updateSun });
   skyControls.renderer = renderer;
-  skyControls.scene = scene; // AGGIUNTO
+  skyControls.scene = scene;
+
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
   scene.add(ambientLight);
 
@@ -85,6 +96,7 @@ export function addSky(scene, renderer, onReady) {
     starPositions[i] = (Math.random() - 0.5) * 4000;
   }
   starGeo.setAttribute("position", new THREE.BufferAttribute(starPositions, 3));
+
   const starMat = new THREE.PointsMaterial({
     color: 0xffffff,
     size: 1.5,
@@ -101,13 +113,6 @@ export function addSky(scene, renderer, onReady) {
   sky.material.uniforms["mieDirectionalG"].value = skyControls.mieDirectionalG;
 
   sunLight = new THREE.DirectionalLight(0xffffff, 10);
-  const dayFactor = Math.max(0, sun.y);
-
-  // Tonalità fissa (rosso/arancio), ma varia saturazione e luminosità
-  const hue = 0.1;
-  const saturation = THREE.MathUtils.lerp(1.0, 0.6, dayFactor); // alba/tramonto → meno saturo a mezzogiorno
-  const lightness = THREE.MathUtils.lerp(0.3, 0.9, dayFactor);
-  sunLight.color.setHSL(hue, saturation, lightness);
   sunLight.castShadow = true;
   sunLight.shadow.mapSize.width = 2048;
   sunLight.shadow.mapSize.height = 2048;
@@ -125,10 +130,8 @@ export function addSky(scene, renderer, onReady) {
 
 export function updateSky(delta) {
   time += delta * 0.01;
-  // Simula inclinazione (altezza del sole nel cielo)
-  const inclination = (Math.sin(time) + 1) / 2;
 
-  // Simula azimuth (posizione da Est a Ovest nel cielo)
+  const inclination = (Math.sin(time) + 1) / 2;
   const azimuth = (Math.cos(time) + 1) / 2;
   skyControls.inclination = inclination;
   skyControls.azimuth = azimuth;

@@ -1,8 +1,5 @@
 import * as THREE from 'three';
-
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-
-import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { loadPlayer } from './model/player';
 import { addFloor } from './scene/floor';
 import { updateCharacter } from './controller/CharacterController';
@@ -22,10 +19,9 @@ const settings = {
 const PI90 = Math.PI / 2;
 
 const controls = {
-
 	key: [0, 0],
 	ease: new THREE.Vector3(),
-	position: new THREE.Vector3(),
+	position: new THREE.Vector3(0, 0, 0),
 	up: new THREE.Vector3(0, 1, 0),
 	rotate: new THREE.Quaternion(),
 	current: 'Idle',
@@ -34,18 +30,38 @@ const controls = {
 	walkVelocity: 1.8,
 	rotateSpeed: 0.05,
 	floorDecale: 0,
-
+	groundOffset: 1.0,
+	spawnInitialized: false,
+	raycastPadding: 20,
+	floorRecenterSmooth: 8,
+	playerVerticalSmooth: 12,
+	cameraTargetHeight: 1.2,
+	cameraTargetSmooth: 12,
+	cameraPositionSmooth: 10,
+	terrainSeed: 1337,
+	debugEnabled: false,
+	debugData: {
+		playerY: 0,
+		terrainY: 0,
+		cameraY: 0,
+		groundOffset: 1,
+		spawnInitialized: false,
+		floorSeed: 1337,
+	},
 };
 
+const desiredCameraTarget = new THREE.Vector3();
+const desiredCameraPosition = new THREE.Vector3();
+const currentCameraOffset = new THREE.Vector3();
+let debugOverlay;
 
 init();
 
 function init() {
-
 	const container = document.getElementById('container');
 
 	camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
-	camera.position.set(0, 2, - 5);
+	camera.position.set(0, 22, -5);
 
 	clock = new THREE.Clock();
 
@@ -56,20 +72,6 @@ function init() {
 
 	followGroup = new THREE.Group();
 	scene.add(followGroup);
-
-	//const dirLight = new THREE.DirectionalLight(0xffffff, 5);
-	//dirLight.position.set(- 2, 5, - 3);
-	//dirLight.castShadow = true;
-	//const cam = dirLight.shadow.camera;
-	//cam.top = cam.right = 2;
-	//cam.bottom = cam.left = - 2;
-	//cam.near = 3;
-	//cam.far = 8;
-	//dirLight.shadow.mapSize.set(1024, 1024);
-	//followGroup.add(dirLight);
-	//followGroup.add(dirLight.target);
-
-	//scene.add( new THREE.CameraHelper( cam ) );
 
 	renderer = new THREE.WebGLRenderer({ antialias: true });
 	renderer.setPixelRatio(window.devicePixelRatio);
@@ -88,50 +90,68 @@ function init() {
 	orbitControls.maxPolarAngle = PI90 - 0.05;
 	orbitControls.update();
 
-	// EVENTS
-
 	window.addEventListener('resize', onWindowResize);
 	registerKeyboardListeners(controls);
+	setupDebugOverlay();
 
-
-
-
-	// DEMO
 	addSky(scene, renderer, () => {
-		loadPlayer(scene, group, settings, controls, orbitControls, ({ model: loadedModel, skeleton: loadedSkeleton, mixer: loadedMixer, actions: loadedActions }) => {
+		loadPlayer(scene, group, settings, ({ model: loadedModel, skeleton: loadedSkeleton, mixer: loadedMixer, actions: loadedActions, groundOffset }) => {
 			model = loadedModel;
 			skeleton = loadedSkeleton;
 			mixer = loadedMixer;
 			actions = loadedActions;
-			animate(); // avvia il loop solo dopo che è tutto pronto
+			if (Number.isFinite(groundOffset)) controls.groundOffset = groundOffset;
+			initializeCharacterOnTerrain();
+			animate();
 		});
 
-
-		floor = addFloor(scene, renderer, controls);
-	})
-
+		floor = addFloor(scene, controls);
+		controls.debugData.floorSeed = floor.userData.terrainSeed ?? controls.terrainSeed;
+		initializeCharacterOnTerrain();
+	});
 }
 
+function initializeCharacterOnTerrain() {
+	if (controls.spawnInitialized || !floor || !model) return;
+
+	const topY = floor.position.y + (floor.userData.maxTerrainHeight ?? 0) + controls.raycastPadding;
+	const rayOrigin = new THREE.Vector3(controls.position.x, topY, controls.position.z);
+	const rayDirection = new THREE.Vector3(0, -1, 0);
+	const raycaster = new THREE.Raycaster(rayOrigin, rayDirection);
+	const intersects = raycaster.intersectObject(floor, true);
+	if (!intersects.length) {
+		console.warn('Spawn raycast non ha trovato terreno, uso fallback y=0');
+		group.position.set(controls.position.x, controls.groundOffset, controls.position.z);
+		controls.position.copy(group.position);
+		followGroup.position.set(controls.position.x, 0, controls.position.z);
+	} else {
+		const terrainY = intersects[0].point.y;
+		const playerY = terrainY + controls.groundOffset;
+		group.position.set(controls.position.x, playerY, controls.position.z);
+		controls.position.copy(group.position);
+		followGroup.position.set(controls.position.x, terrainY, controls.position.z);
+	}
+
+	orbitControls.target.copy(controls.position).add({ x: 0, y: 1, z: 0 });
+	camera.position.set(controls.position.x, controls.position.y + 2, controls.position.z - 5);
+	orbitControls.update();
+	controls.spawnInitialized = true;
+	controls.debugData.spawnInitialized = true;
+}
 
 function onWindowResize() {
-
 	camera.aspect = window.innerWidth / window.innerHeight;
 	camera.updateProjectionMatrix();
 	renderer.setSize(window.innerWidth, window.innerHeight);
-
 }
 
 function animate() {
-
-	// Render loop
-
 	const delta = clock.getDelta();
-	updateSky(delta)
+	updateSky(delta);
 
 	updateCharacter({
 		delta,
 		controls,
-		camera,
 		group,
 		followGroup,
 		floor,
@@ -140,7 +160,112 @@ function animate() {
 		settings,
 		orbitControls,
 	});
+	updateFollowCamera(delta);
+	updateDebugOverlay();
 
 	renderer.render(scene, camera);
+}
 
+function updateFollowCamera(delta) {
+	currentCameraOffset.copy(camera.position).sub(orbitControls.target);
+
+	desiredCameraTarget.set(
+		controls.position.x,
+		controls.position.y + controls.cameraTargetHeight,
+		controls.position.z
+	);
+	desiredCameraPosition.copy(desiredCameraTarget).add(currentCameraOffset);
+
+	const targetSmooth = controls.cameraTargetSmooth;
+	const positionSmooth = controls.cameraPositionSmooth;
+
+	orbitControls.target.x = THREE.MathUtils.damp(
+		orbitControls.target.x,
+		desiredCameraTarget.x,
+		targetSmooth,
+		delta
+	);
+	orbitControls.target.y = THREE.MathUtils.damp(
+		orbitControls.target.y,
+		desiredCameraTarget.y,
+		targetSmooth,
+		delta
+	);
+	orbitControls.target.z = THREE.MathUtils.damp(
+		orbitControls.target.z,
+		desiredCameraTarget.z,
+		targetSmooth,
+		delta
+	);
+
+	camera.position.x = THREE.MathUtils.damp(
+		camera.position.x,
+		desiredCameraPosition.x,
+		positionSmooth,
+		delta
+	);
+	camera.position.y = THREE.MathUtils.damp(
+		camera.position.y,
+		desiredCameraPosition.y,
+		positionSmooth,
+		delta
+	);
+	camera.position.z = THREE.MathUtils.damp(
+		camera.position.z,
+		desiredCameraPosition.z,
+		positionSmooth,
+		delta
+	);
+
+	orbitControls.update();
+}
+
+function setupDebugOverlay() {
+	debugOverlay = document.createElement('div');
+	debugOverlay.style.position = 'fixed';
+	debugOverlay.style.top = '10px';
+	debugOverlay.style.left = '10px';
+	debugOverlay.style.zIndex = '20';
+	debugOverlay.style.minWidth = '220px';
+	debugOverlay.style.padding = '10px 12px';
+	debugOverlay.style.border = '1px solid rgba(255,255,255,0.3)';
+	debugOverlay.style.background = 'rgba(0,0,0,0.65)';
+	debugOverlay.style.color = '#d9f5ff';
+	debugOverlay.style.fontFamily = 'monospace';
+	debugOverlay.style.fontSize = '12px';
+	debugOverlay.style.whiteSpace = 'pre-line';
+	debugOverlay.style.display = 'none';
+	document.body.appendChild(debugOverlay);
+
+	window.addEventListener('keydown', (event) => {
+		if (event.code === 'F3') {
+			event.preventDefault();
+			controls.debugEnabled = !controls.debugEnabled;
+			debugOverlay.style.display = controls.debugEnabled ? 'block' : 'none';
+		}
+	});
+}
+
+function updateDebugOverlay() {
+	controls.debugData.cameraY = camera.position.y;
+	controls.debugData.groundOffset = controls.groundOffset;
+	controls.debugData.spawnInitialized = controls.spawnInitialized;
+
+	if (!controls.debugEnabled || !debugOverlay) return;
+
+	const d = controls.debugData;
+	const terrainYText = Number.isFinite(d.terrainY) ? d.terrainY.toFixed(2) : 'n/a';
+	const playerYText = Number.isFinite(d.playerY) ? d.playerY.toFixed(2) : 'n/a';
+	const cameraYText = Number.isFinite(d.cameraY) ? d.cameraY.toFixed(2) : 'n/a';
+	const deltaText = Number.isFinite(d.playerToTerrain) ? d.playerToTerrain.toFixed(2) : 'n/a';
+	debugOverlay.textContent = [
+		'Debug (F3)',
+		`spawnInitialized: ${d.spawnInitialized}`,
+		`terrainSeed: ${d.floorSeed}`,
+		`terrainY: ${terrainYText}`,
+		`playerY: ${playerYText}`,
+		`cameraY: ${cameraYText}`,
+		`player-terrain: ${deltaText}`,
+		`groundOffset: ${d.groundOffset.toFixed(2)}`,
+	].join('\n');
 }

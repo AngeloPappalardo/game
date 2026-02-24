@@ -1,24 +1,13 @@
-import { initScene } from './scene/initScene.js';
-import { addLights } from './scene/lights.js';
-import { addFloor } from './scene/floor.js';
-import { loadModel } from './scene/loadModel.js';
-import { setupInput } from './controls/inputControls.js';
-import { setCharacterRefs } from './animation/characterUpdater.js';
+import { addFloor } from "./scene/floor.js";
+import { addSky, updateSky } from "./scene/sky.js";
+import { updateCharacter } from "./controller/CharacterController.js";
+import { registerKeyboardListeners } from "./controller/KeyboardControls.js";
 
-async function main() {
-  const { scene, camera, renderer, followGroup, clock, orbitControls, group } = initScene();
-  addLights(scene, followGroup);
-   const floor = addFloor(scene, renderer);
-  setupInput();
-
-    setCharacterRefs({
-    cam: camera,
-    grp: group,
-    flr: floor,
-    follow: followGroup,
-    orbCtrl: orbitControls
-  });
-
-  await loadModel({ scene, renderer, camera, orbitControls, followGroup, clock });
-}
-main();
+// Smoke file: mantiene solo import reali del progetto.
+console.log("Smoke imports OK", {
+  addFloor: typeof addFloor === "function",
+  addSky: typeof addSky === "function",
+  updateSky: typeof updateSky === "function",
+  updateCharacter: typeof updateCharacter === "function",
+  registerKeyboardListeners: typeof registerKeyboardListeners === "function",
+});

@@ -1,16 +1,24 @@
 import { GUI } from "three/addons/libs/lil-gui.module.min.js";
 
-export function createPanel(skeleton, skyControls, updateSun) {
-  const settings = {
-    show_skeleton: false,
-    fixe_transition: true,
-  };
-
+export function createPanel({
+  skeleton = null,
+  settings = null,
+  skyControls = null,
+  updateSun = null,
+} = {}) {
   const panel = new GUI({ width: 310 });
-  panel.add(settings, "show_skeleton").onChange((b) => (skeleton.visible = b));
-  panel.add(settings, "fixe_transition");
 
-  if (skyControls && updateSun) {
+  if (skeleton && settings) {
+    skeleton.visible = !!settings.show_skeleton;
+    panel.add(settings, "show_skeleton").onChange((b) => {
+      skeleton.visible = b;
+    });
+    panel.add(settings, "fixe_transition");
+  } else if (settings) {
+    panel.add(settings, "fixe_transition");
+  }
+
+  if (skyControls && typeof updateSun === "function") {
     const skyFolder = panel.addFolder("Cielo Atmosferico");
     skyFolder
       .add(skyControls, "turbidity", 0.0, 20.0, 0.1)
@@ -37,6 +45,7 @@ export function createPanel(skeleton, skyControls, updateSun) {
     skyFolder.open();
   }
 }
+
 export function createPanel2(params, water, updateTerrain) {
   const panel = new GUI({ width: 310 });
   const terrainFolder = panel.addFolder("Terreno");

@@ -4,7 +4,12 @@
   "description": "test",
   "main": "index.js",
   "scripts": {
-    "dev": "vite"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node --check main.js && node --check test.js && npm run smoke:spawn",
+    "lint": "node --check main.js && node --check model/player.js && node --check controller/CharacterController.js && node --check scene/sky.js && node --check scene/floor.js && node --check ui/guiPanel.js && node --check test.js",
+    "smoke:spawn": "node scripts/spawnSmokeTest.mjs"
   },
   "author": "Angelo Pappalardo",
   "license": "ISC",

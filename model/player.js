@@ -1,59 +1,84 @@
 // Player.js
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { GUI } from "three/addons/libs/lil-gui.module.min.js";
 import { createPanel } from "../ui/guiPanel";
 
 export function loadPlayer(
   scene,
   group,
   settings,
-  controls,
-  orbitControls,
   onReady
 ) {
   const loader = new GLTFLoader();
-  const PI = Math.PI;
 
-  loader.load("gltf/player/Xbot.glb", function (gltf) {
-    const model = gltf.scene;
-    group.add(model);
-    //model.rotation.y = PI;
-    //group.rotation.y = PI;
+  loader.load(
+    "gltf/player/Xbot.glb",
+    function (gltf) {
+      const model = gltf.scene;
+      group.add(model);
+      model.updateMatrixWorld(true);
 
+      const skeleton = new THREE.SkeletonHelper(model);
+      skeleton.setColors(new THREE.Color(0xe000ff), new THREE.Color(0x00e0ff));
+      skeleton.visible = false;
+      scene.add(skeleton);
 
-    // Skeleton
-    const skeleton = new THREE.SkeletonHelper(model);
-    skeleton.setColors(new THREE.Color(0xe000ff), new THREE.Color(0x00e0ff));
-    skeleton.visible = false;
-    scene.add(skeleton);
+      createPanel({ skeleton, settings });
 
-    // GUI
-    createPanel(skeleton);
+      const mixer = new THREE.AnimationMixer(model);
+      const animations = gltf.animations;
+      console.log("Animazioni disponibili nel modello GLTF:");
+      animations.forEach((clip, index) => {
+        console.log(`${index}: ${clip.name}`);
+      });
 
-    // Animation mixer e actions
-    const mixer = new THREE.AnimationMixer(model);
-    const animations = gltf.animations;
-    // Logga tutti i nomi delle animazioni disponibili
-    console.log("Animazioni disponibili nel modello GLTF:");
-    animations.forEach((clip, index) => {
-      console.log(`${index}: ${clip.name}`);
-    });
-    const actions = {
-      Idle: mixer.clipAction(animations[2]),
-      Walk: mixer.clipAction(animations[6]),
-      Run: mixer.clipAction(animations[3]),
-    };
+      const pickClip = (keywords, fallbackIndices = []) => {
+        const matched = animations.find((clip) => {
+          const name = clip.name.toLowerCase();
+          return keywords.some((keyword) => name.includes(keyword));
+        });
+        if (matched) return matched;
 
-    for (const m in actions) {
-      actions[m].enabled = true;
-      actions[m].setEffectiveTimeScale(1);
-      if (m !== "Idle") actions[m].setEffectiveWeight(0);
+        for (const index of fallbackIndices) {
+          if (animations[index]) return animations[index];
+        }
+        return null;
+      };
+
+      const idleClip = pickClip(["idle"], [2, 0]);
+      const walkClip = pickClip(["walk"], [6, 1]);
+      const runClip = pickClip(["run", "jog", "sprint"], [3, 2]);
+
+      if (!idleClip || !walkClip || !runClip) {
+        const available = animations.map((clip) => clip.name).join(", ");
+        console.error(
+          `Animazioni mancanti (Idle/Walk/Run). Disponibili: ${available}`
+        );
+        return;
+      }
+
+      const actions = {
+        Idle: mixer.clipAction(idleClip),
+        Walk: mixer.clipAction(walkClip),
+        Run: mixer.clipAction(runClip),
+      };
+
+      const modelBounds = new THREE.Box3().setFromObject(model);
+      const groundOffset = Math.max(0, -modelBounds.min.y) + 0.02;
+
+      for (const m in actions) {
+        actions[m].enabled = true;
+        actions[m].setEffectiveTimeScale(1);
+        if (m !== "Idle") actions[m].setEffectiveWeight(0);
+      }
+
+      actions.Idle.play();
+      onReady({ model, skeleton, mixer, actions, groundOffset });
+    },
+    undefined,
+    function (error) {
+      const details = error?.message || error;
+      console.error("Errore caricamento GLTF player:", details);
     }
-
-    actions.Idle.play();
-
-    // Callback per comunicare gli oggetti al file principale
-    onReady({ model, skeleton, mixer, actions });
-  });
+  );
 }
