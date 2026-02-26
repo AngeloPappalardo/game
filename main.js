@@ -114,7 +114,22 @@ const desiredCameraTarget = new THREE.Vector3();
 const desiredCameraPosition = new THREE.Vector3();
 const currentCameraOffset = new THREE.Vector3();
 let debugOverlay;
+import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
 
+let envMap = null;
+
+new RGBELoader().load(
+  'https://threejs.org/examples/textures/equirectangular/venice_sunset_1k.hdr',
+  (hdr) => {
+    hdr.mapping = THREE.EquirectangularReflectionMapping;
+    scene.environment = hdr;
+    scene.background = hdr;
+    envMap = hdr;
+
+    // SOLO dopo che è caricato crei l'acqua
+    waterSystem = createWaterSystem(scene, floor, controls, envMap);
+  }
+);
 init();
 
 function init() {
