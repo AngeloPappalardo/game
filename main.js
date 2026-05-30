@@ -46,20 +46,21 @@ const controls = {
 	terrainSeed: 1337,
 	terrainProfile: 'hills',
 	terrainMaxHeight: 12,
-	terrainSegments: 260,
+	terrainSegments: 160,
+	highQualityTerrain: false,
 	waterLevel: 1.2,
 	waterSize: 420,
-	waterSegments: 220,
+	waterSegments: 96,
 	waterWaveAmplitude: 0.42,
 	waterWaveSpeed: 0.85,
 	waterWaveScale: 0.085,
 	waterOpacity: 0.72,
 	grassEnabled: true,
 	secondaryVegetationEnabled: true,
-	grassDensityNear: 1.0,
-	grassDensityFar: 1.0,
-	grassCopiesNear: 6,
-	grassCopiesFar: 5,
+	grassDensityNear: 0.72,
+	grassDensityFar: 0.42,
+	grassCopiesNear: 3,
+	grassCopiesFar: 2,
 	grassJitterNear: 0.095,
 	grassJitterFar: 0.085,
 	grassDistanceNear: 14,
@@ -85,15 +86,17 @@ const controls = {
 	bushDensity: 0.08,
 	treeDensity: 0.05,
 	pebbleDensity: 0.12,
-	maxDynamicRocks: 220,
+	maxDynamicRocks: 72,
 	rockSlopeAccel: 4.0,
 	rockPlayerPush: 8.5,
 	rockPlayerRadius: 0.75,
 	rockDamping: 2.2,
 	rockRestitution: 0.22,
-	rockCollisionIterations: 2,
+	rockCollisionIterations: 1,
 	rockMaxSpeed: 3.6,
 	rockGroundStick: 0.58,
+	maxPixelRatio: 1,
+	shadowMapSize: 1024,
 	debugEnabled: false,
 	debugData: {
 		playerY: 0,
@@ -113,23 +116,24 @@ const controls = {
 const desiredCameraTarget = new THREE.Vector3();
 const desiredCameraPosition = new THREE.Vector3();
 const currentCameraOffset = new THREE.Vector3();
+const fpsStats = {
+	lastTime: 0,
+	frames: 0,
+	accumulatedMs: 0,
+	updateIntervalMs: 500,
+};
+const benchmarkStats = {
+	running: false,
+	fps: null,
+	frameMs: null,
+	samples: 120,
+};
+let fpsOverlay;
 let debugOverlay;
 import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
 
 let envMap = null;
 
-new RGBELoader().load(
-  'https://threejs.org/examples/textures/equirectangular/venice_sunset_1k.hdr',
-  (hdr) => {
-    hdr.mapping = THREE.EquirectangularReflectionMapping;
-    scene.environment = hdr;
-    scene.background = hdr;
-    envMap = hdr;
-
-    // SOLO dopo che è caricato crei l'acqua
-    waterSystem = createWaterSystem(scene, floor, controls, envMap);
-  }
-);
 init();
 
 function init() {
@@ -150,7 +154,7 @@ function init() {
 	scene.add(followGroup);
 
 	renderer = new THREE.WebGLRenderer({ antialias: true });
-	renderer.setPixelRatio(window.devicePixelRatio);
+	renderer.setPixelRatio(getRenderPixelRatio());
 	renderer.setSize(window.innerWidth, window.innerHeight);
 	renderer.setAnimationLoop(animate);
 	renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -168,6 +172,8 @@ function init() {
 
 	window.addEventListener('resize', onWindowResize);
 	registerKeyboardListeners(controls);
+	setupFpsOverlay();
+	setupBenchmarkControls();
 	setupDebugOverlay();
 
 	addSky(scene, renderer, () => {
@@ -186,6 +192,7 @@ function init() {
 		controls.debugData.terrainProfile = floor.userData.terrainProfile ?? controls.terrainProfile;
 		vegetationSystem = createVegetationSystem(scene, floor, controls);
 		waterSystem = createWaterSystem(scene, floor, controls);
+		loadEnvironmentMap();
 		if (vegetationSystem) {
 			controls.debugData.grassInstancesNear = vegetationSystem.nearGrass.count;
 			controls.debugData.grassInstancesFar = vegetationSystem.farGrass.count;
@@ -197,7 +204,7 @@ function init() {
 		}
 		saveTerrainPresetToStorage();
 		initializeCharacterOnTerrain();
-	});
+	}, controls);
 }
 
 function loadTerrainPresetFromStorage() {
@@ -251,10 +258,28 @@ function initializeCharacterOnTerrain() {
 function onWindowResize() {
 	camera.aspect = window.innerWidth / window.innerHeight;
 	camera.updateProjectionMatrix();
+	renderer.setPixelRatio(getRenderPixelRatio());
 	renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
-function animate() {
+function getRenderPixelRatio() {
+	return Math.min(window.devicePixelRatio || 1, controls.maxPixelRatio ?? 1);
+}
+
+function loadEnvironmentMap() {
+	new RGBELoader().load(
+		'https://threejs.org/examples/textures/equirectangular/venice_sunset_1k.hdr',
+		(hdr) => {
+			hdr.mapping = THREE.EquirectangularReflectionMapping;
+			scene.environment = hdr;
+			envMap = hdr;
+			if (waterSystem) waterSystem.setEnvironmentMap(envMap);
+		}
+	);
+}
+
+function animate(timestamp = performance.now()) {
+	updateFpsOverlay(timestamp);
 	const delta = clock.getDelta();
 	updateSky(delta);
 
@@ -331,10 +356,99 @@ function updateFollowCamera(delta) {
 	orbitControls.update();
 }
 
+function setupFpsOverlay() {
+	fpsOverlay = document.createElement('div');
+	fpsOverlay.id = 'fps-counter';
+	fpsOverlay.textContent = getFpsOverlayText('--', '--');
+	document.body.appendChild(fpsOverlay);
+}
+
+function updateFpsOverlay(timestamp) {
+	if (!fpsOverlay) return;
+
+	if (!fpsStats.lastTime) {
+		fpsStats.lastTime = timestamp;
+		return;
+	}
+
+	const frameMs = timestamp - fpsStats.lastTime;
+	fpsStats.lastTime = timestamp;
+	if (frameMs <= 0) return;
+
+	fpsStats.frames += 1;
+	fpsStats.accumulatedMs += frameMs;
+
+	if (fpsStats.accumulatedMs >= fpsStats.updateIntervalMs) {
+		const fps = (fpsStats.frames * 1000) / fpsStats.accumulatedMs;
+		const averageFrameMs = fpsStats.accumulatedMs / fpsStats.frames;
+		fpsOverlay.textContent = getFpsOverlayText(Math.round(fps), averageFrameMs.toFixed(1));
+		fpsStats.frames = 0;
+		fpsStats.accumulatedMs = 0;
+	}
+}
+
+function getFpsOverlayText(fps, frameMs) {
+	const parts = [
+		`FPS: ${fps}`,
+		'CAP: monitor/vsync',
+		`frame time: ${frameMs}ms`,
+	];
+	if (benchmarkStats.running) {
+		parts.push('BENCH: running');
+	} else if (benchmarkStats.fps !== null && benchmarkStats.frameMs !== null) {
+		parts.push(`BENCH: ${benchmarkStats.fps} FPS / ${benchmarkStats.frameMs}ms`);
+	}
+	return parts.join(' | ');
+}
+
+function setupBenchmarkControls() {
+	window.addEventListener('keydown', (event) => {
+		if (event.code === 'F4') {
+			event.preventDefault();
+			runUncappedRenderBenchmark();
+		}
+	});
+}
+
+function runUncappedRenderBenchmark() {
+	if (benchmarkStats.running || !renderer || !scene || !camera) return;
+
+	benchmarkStats.running = true;
+	if (fpsOverlay) fpsOverlay.textContent = getFpsOverlayText('--', '--');
+
+	const previousAnimationLoop = animate;
+	const gl = renderer.getContext();
+	const samples = benchmarkStats.samples;
+
+	renderer.setAnimationLoop(null);
+
+	requestAnimationFrame(() => {
+		const start = performance.now();
+		for (let i = 0; i < samples; i++) {
+			renderer.render(scene, camera);
+		}
+		gl.finish();
+		const elapsedMs = performance.now() - start;
+		const estimatedFps = (samples * 1000) / elapsedMs;
+		const estimatedFrameMs = elapsedMs / samples;
+
+		benchmarkStats.fps = Math.round(estimatedFps);
+		benchmarkStats.frameMs = estimatedFrameMs.toFixed(1);
+		benchmarkStats.running = false;
+
+		fpsStats.lastTime = 0;
+		fpsStats.frames = 0;
+		fpsStats.accumulatedMs = 0;
+		clock.getDelta();
+		renderer.setAnimationLoop(previousAnimationLoop);
+		if (fpsOverlay) fpsOverlay.textContent = getFpsOverlayText('--', '--');
+	});
+}
+
 function setupDebugOverlay() {
 	debugOverlay = document.createElement('div');
 	debugOverlay.style.position = 'fixed';
-	debugOverlay.style.top = '10px';
+	debugOverlay.style.top = '42px';
 	debugOverlay.style.left = '10px';
 	debugOverlay.style.zIndex = '20';
 	debugOverlay.style.minWidth = '220px';

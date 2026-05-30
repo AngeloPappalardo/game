@@ -4,7 +4,7 @@ function createWaterMaterial(envMap) {
   return new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
-    side: THREE.DoubleSide,
+    side: THREE.FrontSide,
 
     uniforms: {
       uTime: { value: 0 },
@@ -155,6 +155,9 @@ export function createWaterSystem(scene, floor, controls, envMap) {
 
   return {
     mesh,
+    setEnvironmentMap(nextEnvMap) {
+      material.uniforms.uEnvMap.value = nextEnvMap;
+    },
     update(delta, sunDir, lightIntensity = 1.0) {
 
       material.uniforms.uTime.value += delta;

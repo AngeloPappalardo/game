@@ -537,10 +537,35 @@ function createRockPhysicsSystem(pebbleMeshes, floor, controls, random) {
         }
       }
 
+      const cellSize = Math.max(0.5, playerRadius);
+      const collisionCells = new Map();
+      for (let i = 0; i < bodies.length; i++) {
+        const body = bodies[i];
+        const cx = Math.floor(body.pos.x / cellSize);
+        const cz = Math.floor(body.pos.z / cellSize);
+        const key = `${cx},${cz}`;
+        let cell = collisionCells.get(key);
+        if (!cell) {
+          cell = [];
+          collisionCells.set(key, cell);
+        }
+        cell.push(i);
+      }
+
       for (let it = 0; it < collisionIterations; it++) {
         for (let i = 0; i < bodies.length; i++) {
-          for (let j = i + 1; j < bodies.length; j++) {
-            collideBodies(bodies[i], bodies[j], restitution);
+          const body = bodies[i];
+          const cx = Math.floor(body.pos.x / cellSize);
+          const cz = Math.floor(body.pos.z / cellSize);
+          for (let ox = -1; ox <= 1; ox++) {
+            for (let oz = -1; oz <= 1; oz++) {
+              const cell = collisionCells.get(`${cx + ox},${cz + oz}`);
+              if (!cell) continue;
+              for (const j of cell) {
+                if (j <= i) continue;
+                collideBodies(body, bodies[j], restitution);
+              }
+            }
           }
         }
       }

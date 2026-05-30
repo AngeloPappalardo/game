@@ -4,6 +4,7 @@ import { createPanel } from "../ui/guiPanel";
 
 let sky, stars, moon, sunLight, ambientLight, hemiLight, dust;
 let time = 0;
+let skyUpdateAccumulator = 0;
 let exposureCurrent = 0.5;
 let exposureTarget = 0.5;
 
@@ -75,7 +76,6 @@ export function updateSun() {
   if (stars) {
     stars.material.opacity = nightFactor * (0.65 + (1 - twilightFactor) * 0.35);
     stars.material.transparent = true;
-    stars.material.needsUpdate = true;
   }
 
   moon.material.emissiveIntensity = nightFactor * 0.95;
@@ -143,7 +143,7 @@ export function updateSun() {
   sunLight.target.updateMatrixWorld();
 }
 
-export function addSky(scene, renderer, onReady) {
+export function addSky(scene, renderer, onReady, performanceControls = {}) {
   createPanel({ skyControls, updateSun });
   skyControls.renderer = renderer;
   skyControls.scene = scene;
@@ -194,8 +194,8 @@ export function addSky(scene, renderer, onReady) {
 
   sunLight = new THREE.DirectionalLight(0xffffff, 10);
   sunLight.castShadow = true;
-  sunLight.shadow.mapSize.width = 2048;
-  sunLight.shadow.mapSize.height = 2048;
+  sunLight.shadow.mapSize.width = performanceControls.shadowMapSize ?? 1024;
+  sunLight.shadow.mapSize.height = performanceControls.shadowMapSize ?? 1024;
   sunLight.shadow.camera.near = 0.5;
   sunLight.shadow.camera.far = 1000;
   sunLight.shadow.camera.left = -200;
@@ -210,17 +210,22 @@ export function addSky(scene, renderer, onReady) {
 
 export function updateSky(delta) {
   time += delta * 0.01;
-
-  const inclination = (Math.sin(time) + 1) / 2;
-  const azimuth = (Math.cos(time) + 1) / 2;
-  skyControls.inclination = inclination;
-  skyControls.azimuth = azimuth;
   if (dust) {
     dust.rotation.y += delta * 0.02;
     dust.position.y = Math.sin(time * 12) * 0.45;
     dust.material.opacity = THREE.MathUtils.lerp(0.08, 0.24, Math.max(0, sun.y + 0.15));
   }
-  updateSun();
+
+  skyUpdateAccumulator += delta;
+  if (skyUpdateAccumulator >= 0.1) {
+    skyUpdateAccumulator = 0;
+    const inclination = (Math.sin(time) + 1) / 2;
+    const azimuth = (Math.cos(time) + 1) / 2;
+    skyControls.inclination = inclination;
+    skyControls.azimuth = azimuth;
+    updateSun();
+  }
+
   exposureCurrent = THREE.MathUtils.damp(exposureCurrent, exposureTarget, 2.4, delta);
   if (skyControls.renderer) {
     skyControls.renderer.toneMappingExposure = exposureCurrent;

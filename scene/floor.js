@@ -208,6 +208,13 @@ export function addFloor(scene, controls) {
   geometry.setAttribute("aoWeight", new THREE.BufferAttribute(aoValues, 1));
   geometry.setAttribute("biomeWeights", new THREE.BufferAttribute(biomeWeights, 4));
 
+  const material = new THREE.MeshStandardMaterial({
+    vertexColors: true,
+    roughness: 0.82,
+    metalness: 0,
+  });
+
+  if (controls.highQualityTerrain ?? false) {
   const textureSets = {
     sand: createBiomeTextureSet(
       `${seed}-sand`,
@@ -234,12 +241,6 @@ export function addFloor(scene, controls) {
       2.2
     ),
   };
-
-  const material = new THREE.MeshStandardMaterial({
-    vertexColors: true,
-    roughness: 0.85,
-    metalness: 0,
-  });
 
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uSandAlbedo = { value: textureSets.sand.albedo };
@@ -397,6 +398,7 @@ export function addFloor(scene, controls) {
         ].join("\n")
       );
   };
+  }
 
   const mesh = new THREE.Mesh(geometry, material);
   mesh.receiveShadow = true;
@@ -406,6 +408,8 @@ export function addFloor(scene, controls) {
   mesh.userData.terrainMaxHeight = maxHeight;
   mesh.userData.terrainSize = size;
   mesh.userData.terrainSegments = segments;
+  const terrainSampleNormal = new THREE.Vector3();
+  const terrainSample = { height: 0, normal: terrainSampleNormal };
   mesh.userData.sampleTerrainLocal = (x, z) => {
     const gridSize = segments + 1;
     const u = ((x / size) + 0.5) * segments;
@@ -449,22 +453,23 @@ export function addFloor(scene, controls) {
     const nx1 = lerp(nx01, nx11, fu);
     const ny1 = lerp(ny01, ny11, fu);
     const nz1 = lerp(nz01, nz11, fu);
-    const normal = new THREE.Vector3(
+    terrainSampleNormal.set(
       lerp(nx0, nx1, fv),
       lerp(ny0, ny1, fv),
       lerp(nz0, nz1, fv)
     ).normalize();
 
-    return { height, normal };
+    terrainSample.height = height;
+    return terrainSample;
   };
+  const terrainWorldSample = { height: 0, normal: terrainSampleNormal };
   mesh.userData.sampleTerrainWorld = (x, z) => {
     const lx = x - mesh.position.x;
     const lz = z - mesh.position.z;
     const sample = mesh.userData.sampleTerrainLocal(lx, lz);
-    return {
-      height: sample.height + mesh.position.y,
-      normal: sample.normal,
-    };
+    terrainWorldSample.height = sample.height + mesh.position.y;
+    terrainWorldSample.normal = sample.normal;
+    return terrainWorldSample;
   };
   scene.add(mesh);
 

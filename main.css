@@ -15,3 +15,20 @@ body {
 canvas {
   display: block;
 }
+
+#fps-counter {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  z-index: 30;
+  min-width: 520px;
+  padding: 6px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  background: rgba(0, 0, 0, 0.72);
+  color: #e8fff4;
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+}

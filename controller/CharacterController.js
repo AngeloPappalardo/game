@@ -10,11 +10,6 @@ function setWeight(action, weight) {
   action.setEffectiveWeight(weight);
 }
 
-// Raycaster e vettori di supporto (fuori dalla funzione per evitare ricreazione ogni frame)
-const downRay = new THREE.Raycaster();
-const rayOrigin = new THREE.Vector3();
-const rayDirection = new THREE.Vector3(0, -1, 0);
-
 export function updateCharacter({
   delta,
   controls,
@@ -111,16 +106,9 @@ export function updateCharacter({
 
   // === Calcolo altezza dal terreno dinamica ===
   if (floor) {
-    const floorTopY =
-      floor.position.y +
-      (floor.userData.maxTerrainHeight ?? 0) +
-      (controls.raycastPadding ?? 20);
-    const rayHeight = Math.max(group.position.y + 5, floorTopY);
-    rayOrigin.set(group.position.x, rayHeight, group.position.z);
-    downRay.set(rayOrigin, rayDirection);
-    const intersects = downRay.intersectObject(floor, true);
-    if (intersects.length > 0) {
-      const terrainY = intersects[0].point.y;
+    const sampleTerrainWorld = floor.userData.sampleTerrainWorld;
+    if (typeof sampleTerrainWorld === "function") {
+      const terrainY = sampleTerrainWorld(group.position.x, group.position.z).height;
       const heightOffset = controls.groundOffset ?? 1.0;
       const targetGroupY = terrainY + heightOffset;
       const targetFollowY = terrainY;
